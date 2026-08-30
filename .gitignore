@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.expo/
+example/.expo/
+example/android/
+example/ios/
+*.log
+.DS_Store
