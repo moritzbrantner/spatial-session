@@ -1,9 +1,4 @@
-import type {
-  SpatialSessionRole,
-  SpatialTransport,
-  TransportPeer,
-  Unsubscribe,
-} from "../types.js";
+import type { SpatialSessionRole, SpatialTransport, TransportPeer, Unsubscribe } from "../types.js";
 
 type PeerListener = (peer: TransportPeer) => void;
 type PeerIdListener = (peerId: string) => void;
@@ -207,7 +202,10 @@ export function createInMemoryTransportPair(): {
   };
 }
 
-function subscribe<T>(listeners: Set<(value: T) => void>, listener: (value: T) => void): Unsubscribe {
+function subscribe<T>(
+  listeners: Set<(value: T) => void>,
+  listener: (value: T) => void,
+): Unsubscribe {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
