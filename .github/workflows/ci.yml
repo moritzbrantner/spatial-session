@@ -15,11 +15,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install
-      - name: Diagnose verification
-        run: |
-          bun run format
-          git diff -- .
-          bun run typecheck
-          bun run test
-          bun run build
-          git diff --quiet -- .
+      - run: bun run verify
