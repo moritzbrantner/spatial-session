@@ -1,4 +1,12 @@
-import { cross, dot, length, multiplyMatrix4, normalize, poseFromMatrix, subtract } from "./math.js";
+import {
+  cross,
+  dot,
+  length,
+  multiplyMatrix4,
+  normalize,
+  poseFromMatrix,
+  subtract,
+} from "./math.js";
 import type { Matrix4, Pose, RoomCalibration, Vector3 } from "./types.js";
 
 const MINIMUM_BASELINE_METERS = 0.2;
