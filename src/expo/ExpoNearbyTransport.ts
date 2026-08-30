@@ -107,7 +107,8 @@ export class ExpoNearbyTransport implements SpatialTransport {
   }
 
   onMessage(listener: MessageListener): Unsubscribe {
-    return subscribe(this.messageListeners, listener);
+    this.messageListeners.add(listener);
+    return () => this.messageListeners.delete(listener);
   }
 
   private attachNativeListeners(): void {
