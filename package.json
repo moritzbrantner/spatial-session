@@ -1,0 +1,69 @@
+{
+  "name": "spatial-session",
+  "version": "0.0.1",
+  "description": "Shared room coordinates and nearby device poses for Expo and React Native.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./expo": {
+      "types": "./dist/expo/index.d.ts",
+      "default": "./dist/expo/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/inMemoryTransport.d.ts",
+      "default": "./dist/testing/inMemoryTransport.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "verify": "bun run format:check && bun run typecheck && bun run test && bun run build"
+  },
+  "dependencies": {
+    "expo-nearby-connections": "^1.1.0",
+    "munim-xr": "^0.1.1",
+    "react-native-nitro-modules": ">=0.36.5 <1"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-native": ">=0.83"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "oxfmt": "^0.65.0",
+    "react": "19.2.0",
+    "react-native": "0.83.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "spatial-computing",
+    "arkit",
+    "arcore",
+    "nearby",
+    "multiplayer"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moritzbrantner/spatial-session.git"
+  }
+}

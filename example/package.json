@@ -1,0 +1,21 @@
+{
+  "name": "spatial-session-example",
+  "version": "0.0.1",
+  "private": true,
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild --clean"
+  },
+  "dependencies": {
+    "expo": "^55.0.0",
+    "expo-nearby-connections": "^1.1.1",
+    "munim-xr": "^0.1.1",
+    "react": "19.2.0",
+    "react-native": "0.83.0",
+    "react-native-nitro-modules": ">=0.36.5 <1",
+    "spatial-session": "file:.."
+  }
+}
