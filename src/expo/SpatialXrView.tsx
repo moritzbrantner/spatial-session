@@ -1,10 +1,4 @@
-import {
-  forwardRef,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  type ComponentProps,
-} from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, type ComponentProps } from "react";
 import { callback } from "react-native-nitro-modules";
 import {
   XRView,
@@ -62,10 +56,7 @@ export const SpatialXrView = forwardRef<SpatialXrViewHandle, SpatialXrViewProps>
     const xrRef = useRef<XRViewRef | null>(null);
     const originRef = useRef<Vector3 | undefined>(undefined);
 
-    const hybridRef = useMemo(
-      () => callback((ref: XRViewRef) => (xrRef.current = ref)),
-      [],
-    );
+    const hybridRef = useMemo(() => callback((ref: XRViewRef) => (xrRef.current = ref)), []);
     const frameHandler = useMemo(
       () =>
         callback((frame: XRFrame) => {
