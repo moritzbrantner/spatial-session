@@ -21,6 +21,8 @@ export type SpatialXrViewProps = Omit<
   | "depthEnabled"
   | "planeDetection"
   | "lightEstimationEnabled"
+  | "onError"
+  | "onTrackingStateChange"
 > & {
   session: SpatialSession;
   frameCallbackFps?: number;
@@ -28,6 +30,7 @@ export type SpatialXrViewProps = Omit<
   planeDetection?: "none" | "horizontal" | "vertical" | "both";
   lightEstimationEnabled?: boolean;
   onTrackingStateChange?: (state: XRTrackingState) => void;
+  onError?: (message: string) => void;
 };
 
 export type SpatialXrViewHandle = {
