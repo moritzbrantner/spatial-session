@@ -16,12 +16,7 @@ import {
   stopDiscovery,
   type BasePeer,
 } from "expo-nearby-connections";
-import type {
-  SpatialSessionRole,
-  SpatialTransport,
-  TransportPeer,
-  Unsubscribe,
-} from "../types.js";
+import type { SpatialSessionRole, SpatialTransport, TransportPeer, Unsubscribe } from "../types.js";
 
 type ExpoNearbyTransportOptions = {
   role: SpatialSessionRole;
@@ -146,7 +141,10 @@ function toTransportPeer(peer: BasePeer): TransportPeer {
   return { peerId: peer.peerId, name: peer.name };
 }
 
-function subscribe<T>(listeners: Set<(value: T) => void>, listener: (value: T) => void): Unsubscribe {
+function subscribe<T>(
+  listeners: Set<(value: T) => void>,
+  listener: (value: T) => void,
+): Unsubscribe {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
