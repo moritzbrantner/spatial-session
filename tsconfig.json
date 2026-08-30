@@ -10,8 +10,7 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["vitest/globals"],
-    "baseUrl": "."
+    "types": ["vitest/globals"]
   },
   "include": ["src", "tests"]
 }
