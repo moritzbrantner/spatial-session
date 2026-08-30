@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
-  Button,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SpatialSession, type SpatialSessionRole, type SpatialSessionSnapshot } from "spatial-session";
+  SpatialSession,
+  type SpatialSessionRole,
+  type SpatialSessionSnapshot,
+} from "spatial-session";
 import {
   ExpoNearbyTransport,
   SpatialXrView,
@@ -115,7 +111,9 @@ function SessionScreen({ deviceName, role }: { deviceName: string; role: Spatial
                 <View key={peer.peerId} style={styles.peerRow}>
                   <Text style={styles.copy}>{peer.name}</Text>
                   <Button
-                    onPress={() => run(() => session.connect(peer.peerId), `Connecting to ${peer.name}`)}
+                    onPress={() =>
+                      run(() => session.connect(peer.peerId), `Connecting to ${peer.name}`)
+                    }
                     title="Connect"
                   />
                 </View>
