@@ -26,8 +26,8 @@ describe("room calibration", () => {
   });
 
   it("rejects calibration points that are too close", () => {
-    expect(() =>
-      createRoomCalibration({ x: 0, y: 0, z: 0 }, { x: 0.05, y: 0, z: 0 }),
-    ).toThrow(/at least 0.2m/);
+    expect(() => createRoomCalibration({ x: 0, y: 0, z: 0 }, { x: 0.05, y: 0, z: 0 })).toThrow(
+      /at least 0.2m/,
+    );
   });
 });
