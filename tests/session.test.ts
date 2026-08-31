@@ -78,5 +78,101 @@ describe("SpatialSession", () => {
 
     const relayed = second.snapshot().peers.find((peer) => peer.deviceId === "first-device");
     expect(relayed?.latestPose?.pose.position.x).toBeCloseTo(2);
+
+    second.setCalibration(calibration);
+    second.publishLocalPose({ pose: poseAt(3, 0, 0), trackingState: "normal" });
+    expect(
+      first.snapshot().peers.find((peer) => peer.deviceId === "second-device")?.latestPose?.pose
+        .position.x,
+    ).toBeCloseTo(3);
+
+    await first.stop();
+    expect(host.snapshot().peers.some((peer) => peer.deviceId === "first-device")).toBe(false);
+    expect(second.snapshot().peers.some((peer) => peer.deviceId === "first-device")).toBe(false);
+  });
+
+  it("invalidates local calibration when reconnecting to a different room", async () => {
+    const network = new InMemoryNetwork();
+    const firstHost = new SpatialSession({
+      deviceId: "first-host-device",
+      deviceName: "First host",
+      roomId: "room-1",
+      transport: new InMemoryTransport(network, "host", "first-host-peer"),
+    });
+    const secondHost = new SpatialSession({
+      deviceId: "second-host-device",
+      deviceName: "Second host",
+      roomId: "room-2",
+      transport: new InMemoryTransport(network, "host", "second-host-peer"),
+    });
+    const client = new SpatialSession({
+      deviceId: "client-device",
+      deviceName: "Client",
+      transport: new InMemoryTransport(network, "client", "client-peer"),
+    });
+
+    await firstHost.start();
+    await secondHost.start();
+    await client.start();
+    await client.connect("first-host-peer");
+    client.setCalibration(calibration);
+    expect(
+      client.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" }),
+    ).toBeDefined();
+
+    await firstHost.stop();
+    await client.connect("second-host-peer");
+
+    expect(client.snapshot()).toMatchObject({ roomId: "room-2", calibrated: false });
+    expect(client.snapshot().latestLocalPose).toBeUndefined();
+    expect(
+      client.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" }),
+    ).toBeUndefined();
+  });
+
+  it("does not return to running when stop overtakes a pending start", async () => {
+    const network = new InMemoryNetwork();
+    let releaseStart: (() => void) | undefined;
+    const transport = new (class extends InMemoryTransport {
+      override async start(deviceName: string): Promise<void> {
+        await new Promise<void>((resolve) => {
+          releaseStart = resolve;
+        });
+        await super.start(deviceName);
+      }
+    })(network, "client", "client-peer");
+    const client = new SpatialSession({ deviceName: "Client", transport });
+
+    const starting = client.start();
+    await client.stop();
+    releaseStart?.();
+    await starting;
+
+    expect(client.snapshot().status).toBe("stopped");
+    await expect(transport.connect("missing-host")).rejects.toThrow(
+      "Transport must be started before connecting.",
+    );
+  });
+
+  it("surfaces a failed hello handshake", async () => {
+    const network = new InMemoryNetwork();
+    const host = new SpatialSession({
+      deviceName: "Host",
+      roomId: "room-1",
+      transport: new InMemoryTransport(network, "host", "host-peer"),
+    });
+    const transport = new (class extends InMemoryTransport {
+      override async send(): Promise<void> {
+        throw new Error("peer disappeared");
+      }
+    })(network, "client", "client-peer");
+    const client = new SpatialSession({ deviceName: "Client", transport });
+
+    await host.start();
+    await client.start();
+    await client.connect("host-peer");
+    await Promise.resolve();
+
+    expect(client.snapshot().error).toBe("Handshake with Host failed: peer disappeared");
   });
 });

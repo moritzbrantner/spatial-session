@@ -51,6 +51,7 @@ export class SpatialSession {
   private readonly peers = new Map<string, SpatialPeer>();
   private readonly listeners = new Set<(snapshot: SpatialSessionSnapshot) => void>();
   private readonly transportUnsubscribers: Unsubscribe[] = [];
+  private lifecycleGeneration = 0;
 
   constructor(config: SpatialSessionConfig) {
     this.deviceId = config.deviceId ?? createId("device");
@@ -65,6 +66,7 @@ export class SpatialSession {
       return;
     }
 
+    const generation = ++this.lifecycleGeneration;
     this.status = "starting";
     this.error = undefined;
     this.emit();
@@ -72,9 +74,16 @@ export class SpatialSession {
 
     try {
       await this.transport.start(this.deviceName);
+      if (generation !== this.lifecycleGeneration) {
+        await this.transport.stop();
+        return;
+      }
       this.status = "running";
       this.emit();
     } catch (error) {
+      if (generation !== this.lifecycleGeneration) {
+        return;
+      }
       this.status = "error";
       this.error = error instanceof Error ? error.message : String(error);
       this.emit();
@@ -83,6 +92,7 @@ export class SpatialSession {
   }
 
   async stop(): Promise<void> {
+    this.lifecycleGeneration += 1;
     while (this.transportUnsubscribers.length > 0) {
       this.transportUnsubscribers.pop()?.();
     }
@@ -187,7 +197,11 @@ export class SpatialSession {
       this.transport.onPeerConnected((peer) => {
         this.transportPeers.set(peer.peerId, peer);
         this.discoveredPeers.delete(peer.peerId);
-        void this.sendHello(peer.peerId);
+        void this.sendHello(peer.peerId).catch((error: unknown) => {
+          this.transportPeers.delete(peer.peerId);
+          this.error = `Handshake with ${peer.name} failed: ${error instanceof Error ? error.message : String(error)}`;
+          this.emit();
+        });
         this.emit();
       }),
       this.transport.onPeerDisconnected((peerId) => {
@@ -235,6 +249,10 @@ export class SpatialSession {
 
   private handleHello(peerId: string, message: HelloMessage): void {
     if (this.role === "client" && message.role === "host" && message.roomId) {
+      if (this.roomId !== undefined && this.roomId !== message.roomId) {
+        this.calibration = undefined;
+        this.latestLocalPose = undefined;
+      }
       this.roomId = message.roomId;
       this.transportPeerToDeviceId.set(peerId, message.deviceId);
     }

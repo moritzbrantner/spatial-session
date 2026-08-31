@@ -40,6 +40,7 @@ export class ExpoNearbyTransport implements SpatialTransport {
   private readonly messageListeners = new Set<MessageListener>();
   private nativeUnsubscribers: Unsubscribe[] = [];
   private started = false;
+  private lifecycleGeneration = 0;
 
   constructor(options: ExpoNearbyTransportOptions) {
     this.role = options.role;
@@ -52,6 +53,7 @@ export class ExpoNearbyTransport implements SpatialTransport {
       return;
     }
 
+    const generation = ++this.lifecycleGeneration;
     this.attachNativeListeners();
     try {
       if (this.role === "host") {
@@ -59,24 +61,29 @@ export class ExpoNearbyTransport implements SpatialTransport {
       } else {
         await startDiscovery(deviceName, this.strategy);
       }
+      if (generation !== this.lifecycleGeneration) {
+        await this.stopNativeSession();
+        return;
+      }
       this.started = true;
     } catch (error) {
+      if (generation !== this.lifecycleGeneration) {
+        return;
+      }
       this.detachNativeListeners();
       throw error;
     }
   }
 
   async stop(): Promise<void> {
+    this.lifecycleGeneration += 1;
     if (!this.started && this.nativeUnsubscribers.length === 0) {
       return;
     }
 
     this.started = false;
     this.detachNativeListeners();
-    await Promise.allSettled([
-      this.role === "host" ? stopAdvertise() : stopDiscovery(),
-      disconnect(),
-    ]);
+    await this.stopNativeSession();
   }
 
   async connect(peerId: string): Promise<void> {
@@ -135,6 +142,13 @@ export class ExpoNearbyTransport implements SpatialTransport {
       unsubscribe();
     }
     this.nativeUnsubscribers = [];
+  }
+
+  private async stopNativeSession(): Promise<void> {
+    await Promise.allSettled([
+      this.role === "host" ? stopAdvertise() : stopDiscovery(),
+      disconnect(),
+    ]);
   }
 }
 
