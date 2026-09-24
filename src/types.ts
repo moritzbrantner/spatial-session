@@ -25,6 +25,8 @@ export type PoseEstimate = {
   deviceId: string;
   deviceName: string;
   roomId: string;
+  streamId: string;
+  sequence: number;
   frameId: "room";
   pose: Pose;
   trackingState: TrackingState;
@@ -48,6 +50,7 @@ export type DiscoveredPeer = {
 export type SpatialPeer = {
   deviceId: string;
   deviceName: string;
+  streamId: string;
   connected: boolean;
   latestPose?: PoseEstimate;
 };

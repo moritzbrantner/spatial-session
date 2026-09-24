@@ -52,7 +52,9 @@ This manual calibration is an MVP feature, not a workaround hidden behind the AP
 
 ## Timing
 
-The wire model carries both `sessionTimeMs` and the XR source timestamp. In the MVP `sessionTimeMs` uses the local wall clock. That is adequate for interactive pose visualization but is **not** a synchronized multi-camera clock. A proper clock-offset/uncertainty model is required before spatial metadata should be treated as frame-accurate recording data.
+The wire model carries both `sessionTimeMs` and the XR source timestamp. Each `SpatialSession` also announces an ephemeral `streamId` and publishes monotonically increasing pose `sequence` numbers. Receivers bind poses to the stream announced by that peer, reject duplicates and out-of-order frames, and ignore delayed frames from superseded streams.
+
+In the MVP `sessionTimeMs` still uses the local wall clock. Sequence numbers provide ordering within one peer stream; they do **not** synchronize clocks across devices. A proper clock-offset/uncertainty model is required before spatial metadata should be treated as frame-accurate recording data.
 
 ## Current limitations
 

@@ -25,6 +25,7 @@ export type SpatialSessionConfig = {
   transport: SpatialTransport;
   deviceId?: string;
   roomId?: string;
+  streamId?: string;
 };
 
 export type PublishPoseInput = {
@@ -38,6 +39,7 @@ export class SpatialSession {
   readonly deviceId: string;
   readonly deviceName: string;
   readonly role: SpatialTransport["role"];
+  readonly streamId: string;
 
   private readonly transport: SpatialTransport;
   private roomId: string | undefined;
@@ -52,12 +54,14 @@ export class SpatialSession {
   private readonly listeners = new Set<(snapshot: SpatialSessionSnapshot) => void>();
   private readonly transportUnsubscribers: Unsubscribe[] = [];
   private lifecycleGeneration = 0;
+  private nextPoseSequence = 1;
 
   constructor(config: SpatialSessionConfig) {
     this.deviceId = config.deviceId ?? createId("device");
     this.deviceName = config.deviceName;
     this.transport = config.transport;
     this.role = config.transport.role;
+    this.streamId = config.streamId ?? createId("stream");
     this.roomId = config.roomId ?? (this.role === "host" ? createId("room") : undefined);
   }
 
@@ -136,6 +140,8 @@ export class SpatialSession {
       deviceId: this.deviceId,
       deviceName: this.deviceName,
       roomId: this.roomId,
+      streamId: this.streamId,
+      sequence: this.nextPoseSequence,
       frameId: "room",
       pose: transformPoseToRoom(input.pose, this.calibration),
       trackingState: input.trackingState,
@@ -146,6 +152,7 @@ export class SpatialSession {
       receivedAtMs: now,
     };
 
+    this.nextPoseSequence += 1;
     this.latestLocalPose = estimate;
     this.emit();
 
@@ -219,6 +226,7 @@ export class SpatialSession {
       type: "hello",
       deviceId: this.deviceId,
       deviceName: this.deviceName,
+      streamId: this.streamId,
       role: this.role,
       ...(this.roomId === undefined ? {} : { roomId: this.roomId }),
     };
@@ -269,6 +277,7 @@ export class SpatialSession {
           type: "hello",
           deviceId: existing.deviceId,
           deviceName: existing.deviceName,
+          streamId: existing.streamId,
           role: "client",
           ...(this.roomId === undefined ? {} : { roomId: this.roomId }),
         };
@@ -276,11 +285,15 @@ export class SpatialSession {
       }
     }
 
+    const existingPeer = this.peers.get(message.deviceId);
     this.peers.set(message.deviceId, {
-      ...this.peers.get(message.deviceId),
       deviceId: message.deviceId,
       deviceName: message.deviceName,
+      streamId: message.streamId,
       connected: true,
+      ...(existingPeer?.streamId === message.streamId && existingPeer.latestPose !== undefined
+        ? { latestPose: existingPeer.latestPose }
+        : {}),
     });
 
     if (this.role === "host") {
@@ -299,16 +312,33 @@ export class SpatialSession {
       return;
     }
 
+    const existing = this.peers.get(message.estimate.deviceId);
+    if (!existing || existing.streamId !== message.estimate.streamId) {
+      return;
+    }
+
+    if (
+      this.role === "host" &&
+      this.transportPeerToDeviceId.get(peerId) !== message.estimate.deviceId
+    ) {
+      return;
+    }
+
+    if (
+      existing.latestPose?.streamId === message.estimate.streamId &&
+      existing.latestPose.sequence >= message.estimate.sequence
+    ) {
+      return;
+    }
+
     const estimate: PoseEstimate = {
       ...message.estimate,
       receivedAtMs: Date.now(),
     };
 
-    const existing = this.peers.get(estimate.deviceId);
     this.peers.set(estimate.deviceId, {
-      deviceId: estimate.deviceId,
+      ...existing,
       deviceName: estimate.deviceName,
-      connected: existing?.connected ?? true,
       latestPose: estimate,
     });
 

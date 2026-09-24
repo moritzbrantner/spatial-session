@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRoomCalibration } from "../src/calibration.js";
 import { poseFromMatrix } from "../src/math.js";
+import { PROTOCOL_VERSION } from "../src/protocol.js";
 import { SpatialSession } from "../src/session.js";
 import { InMemoryNetwork, InMemoryTransport } from "../src/testing/inMemoryTransport.js";
 
@@ -89,6 +90,133 @@ describe("SpatialSession", () => {
     await first.stop();
     expect(host.snapshot().peers.some((peer) => peer.deviceId === "first-device")).toBe(false);
     expect(second.snapshot().peers.some((peer) => peer.deviceId === "first-device")).toBe(false);
+  });
+
+  it("rejects stale, duplicate, wrong-stream, and spoofed remote poses", async () => {
+    const network = new InMemoryNetwork();
+    const hostTransport = new InMemoryTransport(network, "host", "host-peer");
+    const clientTransport = new InMemoryTransport(network, "client", "client-peer");
+    const host = new SpatialSession({
+      deviceId: "host-device",
+      deviceName: "Host",
+      roomId: "room-1",
+      streamId: "host-stream",
+      transport: hostTransport,
+    });
+    const client = new SpatialSession({
+      deviceId: "client-device",
+      deviceName: "Client",
+      streamId: "client-stream",
+      transport: clientTransport,
+    });
+
+    await host.start();
+    await client.start();
+    await client.connect("host-peer");
+    client.setCalibration(calibration);
+
+    const first = client.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" });
+    const second = client.publishLocalPose({ pose: poseAt(2, 0, 0), trackingState: "normal" });
+
+    expect(first?.sequence).toBe(1);
+    expect(second?.sequence).toBe(2);
+    expect(host.snapshot().peers[0]?.latestPose?.sequence).toBe(2);
+
+    await clientTransport.send(
+      "host-peer",
+      JSON.stringify({
+        version: PROTOCOL_VERSION,
+        type: "pose",
+        estimate: first,
+      }),
+    );
+    expect(host.snapshot().peers[0]?.latestPose?.sequence).toBe(2);
+    expect(host.snapshot().peers[0]?.latestPose?.pose.position.x).toBeCloseTo(2);
+
+    await clientTransport.send(
+      "host-peer",
+      JSON.stringify({
+        version: PROTOCOL_VERSION,
+        type: "pose",
+        estimate: {
+          ...second,
+          streamId: "superseded-stream",
+          sequence: 99,
+          pose: poseAt(99, 0, 0),
+        },
+      }),
+    );
+    expect(host.snapshot().peers[0]?.latestPose?.sequence).toBe(2);
+
+    await clientTransport.send(
+      "host-peer",
+      JSON.stringify({
+        version: PROTOCOL_VERSION,
+        type: "pose",
+        estimate: {
+          ...second,
+          deviceId: "host-device",
+          sequence: 100,
+          pose: poseAt(100, 0, 0),
+        },
+      }),
+    );
+    expect(host.snapshot().peers[0]?.latestPose?.sequence).toBe(2);
+  });
+
+  it("accepts a restarted peer stream while rejecting delayed packets from the old stream", async () => {
+    const network = new InMemoryNetwork();
+    const hostTransport = new InMemoryTransport(network, "host", "host-peer");
+    const firstTransport = new InMemoryTransport(network, "client", "first-peer");
+    const host = new SpatialSession({
+      deviceId: "host-device",
+      deviceName: "Host",
+      roomId: "room-1",
+      streamId: "host-stream",
+      transport: hostTransport,
+    });
+    const first = new SpatialSession({
+      deviceId: "client-device",
+      deviceName: "Client",
+      streamId: "stream-1",
+      transport: firstTransport,
+    });
+
+    await host.start();
+    await first.start();
+    await first.connect("host-peer");
+    first.setCalibration(calibration);
+    const oldPose = first.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" });
+    expect(host.snapshot().peers[0]?.streamId).toBe("stream-1");
+
+    await first.stop();
+
+    const secondTransport = new InMemoryTransport(network, "client", "second-peer");
+    const second = new SpatialSession({
+      deviceId: "client-device",
+      deviceName: "Client",
+      streamId: "stream-2",
+      transport: secondTransport,
+    });
+    await second.start();
+    await second.connect("host-peer");
+    second.setCalibration(calibration);
+    second.publishLocalPose({ pose: poseAt(2, 0, 0), trackingState: "normal" });
+
+    expect(host.snapshot().peers[0]?.streamId).toBe("stream-2");
+    expect(host.snapshot().peers[0]?.latestPose?.pose.position.x).toBeCloseTo(2);
+
+    hostTransport.receiveFromNetwork(
+      "first-peer",
+      JSON.stringify({
+        version: PROTOCOL_VERSION,
+        type: "pose",
+        estimate: oldPose,
+      }),
+    );
+
+    expect(host.snapshot().peers[0]?.streamId).toBe("stream-2");
+    expect(host.snapshot().peers[0]?.latestPose?.pose.position.x).toBeCloseTo(2);
   });
 
   it("invalidates local calibration when reconnecting to a different room", async () => {
