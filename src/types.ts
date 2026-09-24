@@ -21,6 +21,13 @@ export type Pose = {
 
 export type TrackingState = "unavailable" | "limited" | "normal";
 
+export type SessionClockEstimate = {
+  offsetMs: number;
+  roundTripTimeMs: number;
+  uncertaintyMs: number;
+  measuredAtMs: number;
+};
+
 export type PoseEstimate = {
   deviceId: string;
   deviceName: string;
@@ -69,6 +76,7 @@ export type SpatialSessionSnapshot = {
   discoveredPeers: DiscoveredPeer[];
   peers: SpatialPeer[];
   latestLocalPose?: PoseEstimate;
+  sessionClock?: SessionClockEstimate;
   error?: string;
 };
 
