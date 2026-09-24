@@ -436,10 +436,7 @@ export class SpatialSession {
         Math.max(0, message.hostSendMs - message.hostReceiveMs),
     );
     const offsetMs =
-      (message.hostReceiveMs -
-        message.clientSendMs +
-        (message.hostSendMs - clientReceiveMs)) /
-      2;
+      (message.hostReceiveMs - message.clientSendMs + (message.hostSendMs - clientReceiveMs)) / 2;
 
     this.sessionClock = {
       offsetMs,
