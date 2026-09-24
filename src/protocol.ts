@@ -1,12 +1,13 @@
 import type { PoseEstimate, SpatialSessionRole } from "./types.js";
 
-export const PROTOCOL_VERSION = 1 as const;
+export const PROTOCOL_VERSION = 2 as const;
 
 export type HelloMessage = {
   version: typeof PROTOCOL_VERSION;
   type: "hello";
   deviceId: string;
   deviceName: string;
+  streamId: string;
   role: SpatialSessionRole;
   roomId?: string;
 };
@@ -40,6 +41,8 @@ export function parseMessage(raw: string): SpatialWireMessage | undefined {
       if (
         typeof value.deviceId !== "string" ||
         typeof value.deviceName !== "string" ||
+        typeof value.streamId !== "string" ||
+        value.streamId.length === 0 ||
         (value.role !== "host" && value.role !== "client") ||
         (value.roomId !== undefined && typeof value.roomId !== "string")
       ) {
@@ -51,6 +54,7 @@ export function parseMessage(raw: string): SpatialWireMessage | undefined {
         type: "hello",
         deviceId: value.deviceId,
         deviceName: value.deviceName,
+        streamId: value.streamId,
         role: value.role,
         ...(value.roomId === undefined ? {} : { roomId: value.roomId }),
       };
@@ -96,6 +100,11 @@ function isPoseEstimatePayload(value: unknown): value is Omit<PoseEstimate, "rec
     typeof value.deviceId === "string" &&
     typeof value.deviceName === "string" &&
     typeof value.roomId === "string" &&
+    typeof value.streamId === "string" &&
+    value.streamId.length > 0 &&
+    typeof value.sequence === "number" &&
+    Number.isSafeInteger(value.sequence) &&
+    value.sequence >= 1 &&
     value.frameId === "room" &&
     (value.trackingState === "normal" ||
       value.trackingState === "limited" ||

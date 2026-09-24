@@ -14,6 +14,7 @@ The first MVP is intentionally small: it proves the reusable spatial-session abs
 - explicit two-point shared-room calibration;
 - continuous position + quaternion + 4x4 transform exchange;
 - tracking-state propagation;
+- per-session stream IDs plus monotonic pose sequence numbers, with stale/duplicate pose rejection;
 - transport-independent core with an in-memory test transport;
 - Expo `SpatialXrView` that composes tracking and the session API.
 
@@ -122,7 +123,7 @@ For the MVP this explicit calibration is preferable to pretending independent AR
 - **Android and iOS cannot currently discover each other through the bundled nearby adapter.** The underlying package uses different platform protocols. Android↔Android and iOS↔iOS are the supported MVP paths.
 - No UWB distance/direction measurements yet.
 - No automatic shared-map/anchor alignment yet.
-- No cross-device clock synchronization yet; do not treat pose timestamps as frame-accurate multi-camera synchronization.
+- No cross-device clock synchronization yet; pose sequence numbers preserve per-peer ordering but do not make timestamps comparable across devices.
 - Pose quality currently exposes AR tracking state, not covariance/error bounds.
 
 These are deliberate follow-up layers rather than requirements for proving the spatial-session API.
