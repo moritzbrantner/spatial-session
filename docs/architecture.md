@@ -54,7 +54,9 @@ This manual calibration is an MVP feature, not a workaround hidden behind the AP
 
 The wire model carries both `sessionTimeMs` and the XR source timestamp. Each `SpatialSession` also announces an ephemeral `streamId` and publishes monotonically increasing pose `sequence` numbers. Receivers bind poses to the stream announced by that peer, reject duplicates and out-of-order frames, and ignore delayed frames from superseded streams.
 
-In the MVP `sessionTimeMs` still uses the local wall clock. Sequence numbers provide ordering within one peer stream; they do **not** synchronize clocks across devices. A proper clock-offset/uncertainty model is required before spatial metadata should be treated as frame-accurate recording data.
+Clients can explicitly call `synchronizeClock()` to exchange a probe/reply with the host. The client records the estimated host-clock offset, measured round-trip time, and a conservative half-RTT uncertainty. Default `sessionTimeMs` values then use the estimated host timeline while pose sequence numbers remain the authority for per-peer ordering.
+
+This is intentionally a point-in-time estimate rather than a hidden continuous synchronization loop. Applications that need tighter recording alignment can choose their own resynchronization cadence, reject high-uncertainty samples, or replace this seam with a more sophisticated drift model later.
 
 ## Current limitations
 
@@ -62,7 +64,7 @@ In the MVP `sessionTimeMs` still uses the local wall clock. Sequence numbers pro
 - Calibration must be performed independently on every phone against the same two physical points.
 - No UWB ranging/direction fusion yet.
 - No shared scene mesh or room reconstruction yet.
-- No cross-device clock synchronization yet.
+- Clock synchronization is host-relative and point-in-time; there is no drift model or multi-sample filter yet.
 - The API reports AR tracking state but does not yet quantify positional/angular uncertainty.
 
 ## Intended next seams
