@@ -3,6 +3,8 @@ import {
   PROTOCOL_VERSION,
   parseMessage,
   serializeMessage,
+  type ClockProbeMessage,
+  type ClockReplyMessage,
   type HelloMessage,
   type PoseMessage,
   type SpatialWireMessage,
@@ -12,6 +14,7 @@ import type {
   Pose,
   PoseEstimate,
   RoomCalibration,
+  SessionClockEstimate,
   SpatialPeer,
   SpatialSessionSnapshot,
   SpatialTransport,
@@ -26,6 +29,9 @@ export type SpatialSessionConfig = {
   deviceId?: string;
   roomId?: string;
   streamId?: string;
+  now?: () => number;
+  idFactory?: (prefix: "device" | "room" | "stream" | "clock") => string;
+  clockSyncTimeoutMs?: number;
 };
 
 export type PublishPoseInput = {
@@ -42,11 +48,25 @@ export class SpatialSession {
   readonly streamId: string;
 
   private readonly transport: SpatialTransport;
+  private readonly now: () => number;
+  private readonly idFactory: NonNullable<SpatialSessionConfig["idFactory"]>;
+  private readonly clockSyncTimeoutMs: number;
   private roomId: string | undefined;
   private calibration: RoomCalibration | undefined;
   private status: SpatialSessionSnapshot["status"] = "idle";
   private error: string | undefined;
   private latestLocalPose: PoseEstimate | undefined;
+  private sessionClock: SessionClockEstimate | undefined;
+  private hostPeerId: string | undefined;
+  private readonly pendingClockProbes = new Map<
+    string,
+    {
+      clientSendMs: number;
+      resolve: (estimate: SessionClockEstimate) => void;
+      reject: (error: Error) => void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
+  >();
   private readonly discoveredPeers = new Map<string, DiscoveredPeer>();
   private readonly transportPeers = new Map<string, TransportPeer>();
   private readonly transportPeerToDeviceId = new Map<string, string>();
@@ -57,12 +77,15 @@ export class SpatialSession {
   private nextPoseSequence = 1;
 
   constructor(config: SpatialSessionConfig) {
-    this.deviceId = config.deviceId ?? createId("device");
+    this.now = config.now ?? Date.now;
+    this.idFactory = config.idFactory ?? ((prefix) => createId(prefix, this.now));
+    this.clockSyncTimeoutMs = config.clockSyncTimeoutMs ?? 5_000;
+    this.deviceId = config.deviceId ?? this.idFactory("device");
     this.deviceName = config.deviceName;
     this.transport = config.transport;
     this.role = config.transport.role;
-    this.streamId = config.streamId ?? createId("stream");
-    this.roomId = config.roomId ?? (this.role === "host" ? createId("room") : undefined);
+    this.streamId = config.streamId ?? this.idFactory("stream");
+    this.roomId = config.roomId ?? (this.role === "host" ? this.idFactory("room") : undefined);
   }
 
   async start(): Promise<void> {
@@ -107,12 +130,52 @@ export class SpatialSession {
     this.transportPeers.clear();
     this.transportPeerToDeviceId.clear();
     this.peers.clear();
+    this.rejectPendingClockProbes(new Error("Spatial session stopped."));
+    this.hostPeerId = undefined;
+    this.sessionClock = undefined;
     this.latestLocalPose = undefined;
     this.emit();
   }
 
   async connect(peerId: string): Promise<void> {
     await this.transport.connect(peerId);
+  }
+
+  async synchronizeClock(): Promise<SessionClockEstimate | undefined> {
+    if (this.role !== "client" || !this.hostPeerId) {
+      return undefined;
+    }
+
+    const hostPeerId = this.hostPeerId;
+    const probeId = this.idFactory("clock");
+    const clientSendMs = this.now();
+    const estimatePromise = new Promise<SessionClockEstimate>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingClockProbes.delete(probeId);
+        reject(new Error(`Clock synchronization timed out after ${this.clockSyncTimeoutMs} ms.`));
+      }, this.clockSyncTimeoutMs);
+      this.pendingClockProbes.set(probeId, { clientSendMs, resolve, reject, timeout });
+    });
+
+    const message: ClockProbeMessage = {
+      version: PROTOCOL_VERSION,
+      type: "clock-probe",
+      probeId,
+      clientSendMs,
+    };
+
+    try {
+      await this.transport.send(hostPeerId, serializeMessage(message));
+    } catch (error) {
+      const pending = this.pendingClockProbes.get(probeId);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        this.pendingClockProbes.delete(probeId);
+        pending.reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+
+    return estimatePromise;
   }
 
   setCalibration(calibration: RoomCalibration): void {
@@ -135,7 +198,7 @@ export class SpatialSession {
       return undefined;
     }
 
-    const now = Date.now();
+    const now = this.now();
     const estimate: PoseEstimate = {
       deviceId: this.deviceId,
       deviceName: this.deviceName,
@@ -145,7 +208,7 @@ export class SpatialSession {
       frameId: "room",
       pose: transformPoseToRoom(input.pose, this.calibration),
       trackingState: input.trackingState,
-      sessionTimeMs: input.sessionTimeMs ?? now,
+      sessionTimeMs: input.sessionTimeMs ?? now + (this.sessionClock?.offsetMs ?? 0),
       ...(input.sourceTimestampMs === undefined
         ? {}
         : { sourceTimestampMs: input.sourceTimestampMs }),
@@ -177,6 +240,7 @@ export class SpatialSession {
       discoveredPeers: [...this.discoveredPeers.values()],
       peers: [...this.peers.values()],
       ...(this.latestLocalPose === undefined ? {} : { latestLocalPose: this.latestLocalPose }),
+      ...(this.sessionClock === undefined ? {} : { sessionClock: this.sessionClock }),
       ...(this.error === undefined ? {} : { error: this.error }),
     };
   }
@@ -250,6 +314,16 @@ export class SpatialSession {
       return;
     }
 
+    if (message.type === "clock-probe") {
+      this.handleClockProbe(peerId, message);
+      return;
+    }
+
+    if (message.type === "clock-reply") {
+      this.handleClockReply(peerId, message);
+      return;
+    }
+
     if (message.type === "pose") {
       this.handlePose(peerId, message);
     }
@@ -262,6 +336,11 @@ export class SpatialSession {
         this.latestLocalPose = undefined;
       }
       this.roomId = message.roomId;
+      if (this.hostPeerId !== undefined && this.hostPeerId !== peerId) {
+        this.rejectPendingClockProbes(new Error("Clock host changed."));
+        this.sessionClock = undefined;
+      }
+      this.hostPeerId = peerId;
       this.transportPeerToDeviceId.set(peerId, message.deviceId);
     }
 
@@ -333,7 +412,7 @@ export class SpatialSession {
 
     const estimate: PoseEstimate = {
       ...message.estimate,
-      receivedAtMs: Date.now(),
+      receivedAtMs: this.now(),
     };
 
     this.peers.set(estimate.deviceId, {
@@ -349,6 +428,63 @@ export class SpatialSession {
     this.emit();
   }
 
+  private handleClockProbe(peerId: string, message: ClockProbeMessage): void {
+    if (this.role !== "host" || !this.transportPeerToDeviceId.has(peerId)) {
+      return;
+    }
+
+    const hostReceiveMs = this.now();
+    const reply: ClockReplyMessage = {
+      version: PROTOCOL_VERSION,
+      type: "clock-reply",
+      probeId: message.probeId,
+      clientSendMs: message.clientSendMs,
+      hostReceiveMs,
+      hostSendMs: this.now(),
+    };
+    void this.transport.send(peerId, serializeMessage(reply)).catch((error: unknown) => {
+      if (this.transportPeers.has(peerId)) {
+        this.error = `Clock reply to ${peerId} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        this.emit();
+      }
+    });
+  }
+
+  private handleClockReply(peerId: string, message: ClockReplyMessage): void {
+    if (this.role !== "client" || peerId !== this.hostPeerId) {
+      return;
+    }
+
+    const pending = this.pendingClockProbes.get(message.probeId);
+    if (pending === undefined || pending.clientSendMs !== message.clientSendMs) {
+      return;
+    }
+    clearTimeout(pending.timeout);
+    this.pendingClockProbes.delete(message.probeId);
+
+    const clientReceiveMs = this.now();
+    const roundTripTimeMs = Math.max(
+      0,
+      clientReceiveMs -
+        message.clientSendMs -
+        Math.max(0, message.hostSendMs - message.hostReceiveMs),
+    );
+    const offsetMs =
+      (message.hostReceiveMs - message.clientSendMs + (message.hostSendMs - clientReceiveMs)) / 2;
+
+    const estimate: SessionClockEstimate = {
+      offsetMs,
+      roundTripTimeMs,
+      uncertaintyMs: roundTripTimeMs / 2,
+      measuredAtMs: clientReceiveMs,
+    };
+    this.sessionClock = estimate;
+    pending.resolve(estimate);
+    this.emit();
+  }
+
   private handleDisconnectedPeer(peerId: string): void {
     this.discoveredPeers.delete(peerId);
     this.transportPeers.delete(peerId);
@@ -356,6 +492,11 @@ export class SpatialSession {
     this.transportPeerToDeviceId.delete(peerId);
 
     if (this.role === "client") {
+      if (peerId === this.hostPeerId) {
+        this.hostPeerId = undefined;
+        this.rejectPendingClockProbes(new Error("Clock host disconnected."));
+        this.sessionClock = undefined;
+      }
       this.peers.clear();
     } else if (deviceId) {
       this.peers.delete(deviceId);
@@ -368,6 +509,14 @@ export class SpatialSession {
     }
 
     this.emit();
+  }
+
+  private rejectPendingClockProbes(error: Error): void {
+    for (const pending of this.pendingClockProbes.values()) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    this.pendingClockProbes.clear();
   }
 
   private async broadcast(raw: string, excludedPeerId?: string): Promise<void> {
@@ -388,8 +537,8 @@ export class SpatialSession {
   }
 }
 
-function createId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+function createId(prefix: string, now: () => number): string {
+  return `${prefix}-${now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function omitReceivedAt(estimate: PoseEstimate): Omit<PoseEstimate, "receivedAtMs"> {
