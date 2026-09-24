@@ -117,9 +117,12 @@ describe("SpatialSession", () => {
 
     const first = client.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" });
     const second = client.publishLocalPose({ pose: poseAt(2, 0, 0), trackingState: "normal" });
+    if (!first || !second) {
+      throw new Error("Expected calibrated local poses.");
+    }
 
-    expect(first?.sequence).toBe(1);
-    expect(second?.sequence).toBe(2);
+    expect(first.sequence).toBe(1);
+    expect(second.sequence).toBe(2);
     expect(host.snapshot().peers[0]?.latestPose?.sequence).toBe(2);
 
     await clientTransport.send(
@@ -187,11 +190,14 @@ describe("SpatialSession", () => {
     await first.connect("host-peer");
     first.setCalibration(calibration);
     const oldPose = first.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" });
+    if (!oldPose) {
+      throw new Error("Expected a calibrated local pose.");
+    }
     expect(host.snapshot().peers[0]?.streamId).toBe("stream-1");
 
     await first.stop();
 
-    const secondTransport = new InMemoryTransport(network, "client", "second-peer");
+    const secondTransport = new InMemoryTransport(network, "client", "first-peer");
     const second = new SpatialSession({
       deviceId: "client-device",
       deviceName: "Client",
