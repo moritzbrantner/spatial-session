@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "Spatial Session MVP",
+    "slug": "spatial-session-mvp",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "dev.moritzbrantner.spatialsession.mvp"
+    },
+    "android": {
+      "package": "dev.moritzbrantner.spatialsession.mvp"
+    },
+    "plugins": [
+      [
+        "expo-nearby-connections",
+        {
+          "bonjourServicesName": "spatial-session",
+          "localNetworkUsagePermissionText": "$(PRODUCT_NAME) finds nearby devices for a shared spatial session.",
+          "bluetoothUsagePermissionText": "$(PRODUCT_NAME) uses Bluetooth to find nearby devices."
+        }
+      ],
+      [
+        "munim-xr",
+        {
+          "cameraPermission": "$(PRODUCT_NAME) uses the camera to track this device in the room.",
+          "arRequired": false
+        }
+      ]
+    ]
+  }
+}
