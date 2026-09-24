@@ -442,9 +442,7 @@ describe("SpatialSession", () => {
     );
     await Promise.resolve();
 
-    expect(host.snapshot().error).toBe(
-      "Clock reply to client-peer failed: clock peer disappeared",
-    );
+    expect(host.snapshot().error).toBe("Clock reply to client-peer failed: clock peer disappeared");
   });
 
   it("does not return to running when stop overtakes a pending start", async () => {
