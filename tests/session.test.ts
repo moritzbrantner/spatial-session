@@ -264,6 +264,49 @@ describe("SpatialSession", () => {
     ).toBeUndefined();
   });
 
+  it("estimates the host clock deterministically and uses it for session timestamps", async () => {
+    const network = new InMemoryNetwork();
+    let clientNow = 1_000;
+    let hostNow = 1_050;
+    const host = new SpatialSession({
+      deviceId: "host-device",
+      deviceName: "Host",
+      roomId: "room-1",
+      streamId: "host-stream",
+      now: () => hostNow,
+      transport: new InMemoryTransport(network, "host", "host-peer"),
+    });
+    const client = new SpatialSession({
+      deviceId: "client-device",
+      deviceName: "Client",
+      streamId: "client-stream",
+      now: () => clientNow,
+      idFactory: (prefix) => `${prefix}-1`,
+      transport: new InMemoryTransport(network, "client", "client-peer"),
+    });
+
+    await host.start();
+    await client.start();
+    await client.connect("host-peer");
+    await client.synchronizeClock();
+
+    expect(client.snapshot().sessionClock).toEqual({
+      offsetMs: 50,
+      roundTripTimeMs: 0,
+      uncertaintyMs: 0,
+      measuredAtMs: 1_000,
+    });
+
+    client.setCalibration(calibration);
+    clientNow = 2_000;
+    hostNow = 2_050;
+    const pose = client.publishLocalPose({ pose: poseAt(1, 0, 0), trackingState: "normal" });
+    expect(pose?.sessionTimeMs).toBe(2_050);
+
+    await host.stop();
+    expect(client.snapshot().sessionClock).toBeUndefined();
+  });
+
   it("does not return to running when stop overtakes a pending start", async () => {
     const network = new InMemoryNetwork();
     let releaseStart: (() => void) | undefined;
