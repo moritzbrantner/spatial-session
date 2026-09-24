@@ -1,6 +1,6 @@
 import type { PoseEstimate, SpatialSessionRole } from "./types.js";
 
-export const PROTOCOL_VERSION = 2 as const;
+export const PROTOCOL_VERSION = 3 as const;
 
 export type HelloMessage = {
   version: typeof PROTOCOL_VERSION;
@@ -24,7 +24,28 @@ export type PeerLeftMessage = {
   deviceId: string;
 };
 
-export type SpatialWireMessage = HelloMessage | PoseMessage | PeerLeftMessage;
+export type ClockProbeMessage = {
+  version: typeof PROTOCOL_VERSION;
+  type: "clock-probe";
+  probeId: string;
+  clientSendMs: number;
+};
+
+export type ClockReplyMessage = {
+  version: typeof PROTOCOL_VERSION;
+  type: "clock-reply";
+  probeId: string;
+  clientSendMs: number;
+  hostReceiveMs: number;
+  hostSendMs: number;
+};
+
+export type SpatialWireMessage =
+  | HelloMessage
+  | PoseMessage
+  | PeerLeftMessage
+  | ClockProbeMessage
+  | ClockReplyMessage;
 
 export function serializeMessage(message: SpatialWireMessage): string {
   return JSON.stringify(message);
@@ -69,6 +90,44 @@ export function parseMessage(raw: string): SpatialWireMessage | undefined {
         version: PROTOCOL_VERSION,
         type: "peer-left",
         deviceId: value.deviceId,
+      };
+    }
+
+    if (value.type === "clock-probe") {
+      if (
+        typeof value.probeId !== "string" ||
+        value.probeId.length === 0 ||
+        !isFiniteNumber(value.clientSendMs)
+      ) {
+        return undefined;
+      }
+
+      return {
+        version: PROTOCOL_VERSION,
+        type: "clock-probe",
+        probeId: value.probeId,
+        clientSendMs: value.clientSendMs,
+      };
+    }
+
+    if (value.type === "clock-reply") {
+      if (
+        typeof value.probeId !== "string" ||
+        value.probeId.length === 0 ||
+        !isFiniteNumber(value.clientSendMs) ||
+        !isFiniteNumber(value.hostReceiveMs) ||
+        !isFiniteNumber(value.hostSendMs)
+      ) {
+        return undefined;
+      }
+
+      return {
+        version: PROTOCOL_VERSION,
+        type: "clock-reply",
+        probeId: value.probeId,
+        clientSendMs: value.clientSendMs,
+        hostReceiveMs: value.hostReceiveMs,
+        hostSendMs: value.hostSendMs,
       };
     }
 
