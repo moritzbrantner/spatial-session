@@ -4,7 +4,7 @@ import { parseMessage, serializeMessage } from "../src/protocol.js";
 describe("wire protocol", () => {
   it("round-trips a hello message with stream identity", () => {
     const raw = serializeMessage({
-      version: 2,
+      version: 3,
       type: "hello",
       deviceId: "phone-a",
       deviceName: "Phone A",
@@ -14,7 +14,7 @@ describe("wire protocol", () => {
     });
 
     expect(parseMessage(raw)).toEqual({
-      version: 2,
+      version: 3,
       type: "hello",
       deviceId: "phone-a",
       deviceName: "Phone A",
@@ -26,7 +26,7 @@ describe("wire protocol", () => {
 
   it("accepts ordered pose metadata", () => {
     const raw = JSON.stringify({
-      version: 2,
+      version: 3,
       type: "pose",
       estimate: {
         deviceId: "phone-a",
@@ -46,13 +46,58 @@ describe("wire protocol", () => {
     });
 
     expect(parseMessage(raw)).toMatchObject({
-      version: 2,
+      version: 3,
       type: "pose",
       estimate: {
         streamId: "stream-a",
         sequence: 7,
       },
     });
+  });
+
+  it("round-trips finite clock synchronization messages", () => {
+    const probe = serializeMessage({
+      version: 3,
+      type: "clock-probe",
+      probeId: "probe-1",
+      clientSendMs: 100,
+    });
+    expect(parseMessage(probe)).toEqual({
+      version: 3,
+      type: "clock-probe",
+      probeId: "probe-1",
+      clientSendMs: 100,
+    });
+
+    const reply = serializeMessage({
+      version: 3,
+      type: "clock-reply",
+      probeId: "probe-1",
+      clientSendMs: 100,
+      hostReceiveMs: 150,
+      hostSendMs: 151,
+    });
+    expect(parseMessage(reply)).toEqual({
+      version: 3,
+      type: "clock-reply",
+      probeId: "probe-1",
+      clientSendMs: 100,
+      hostReceiveMs: 150,
+      hostSendMs: 151,
+    });
+
+    expect(
+      parseMessage(
+        JSON.stringify({
+          version: 3,
+          type: "clock-reply",
+          probeId: "probe-1",
+          clientSendMs: 100,
+          hostReceiveMs: Number.NaN,
+          hostSendMs: 151,
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   it("rejects legacy, malformed, and invalid sequence messages", () => {
@@ -69,10 +114,10 @@ describe("wire protocol", () => {
         }),
       ),
     ).toBeUndefined();
-    expect(parseMessage('{"version":2,"type":"other"}')).toBeUndefined();
+    expect(parseMessage('{"version":3,"type":"other"}')).toBeUndefined();
 
     const invalidSequence = JSON.stringify({
-      version: 2,
+      version: 3,
       type: "pose",
       estimate: {
         deviceId: "phone-a",
