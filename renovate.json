@@ -1,5 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>moritzbrantner/coding-agent-conventions"],
-  "platformAutomerge": true
+  "platformAutomerge": true,
+  "packageRules": [
+    {
+      "description": "munim-xr 0.5.0 was published without lib/index.d.ts; skip that release only.",
+      "matchPackageNames": ["munim-xr"],
+      "allowedVersions": "!/^0\\.5\\.0$/"
+    }
+  ]
 }
