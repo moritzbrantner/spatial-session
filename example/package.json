@@ -14,7 +14,7 @@
     "expo-nearby-connections": "^1.1.1",
     "munim-xr": "^0.4.0",
     "react": "19.3.1",
-    "react-native": "0.88.0",
+    "react-native": "0.88.1",
     "react-native-nitro-modules": ">=0.36.5 <1",
     "spatial-session": "file:.."
   }

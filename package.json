@@ -53,9 +53,9 @@
   },
   "devDependencies": {
     "@types/react": "19.3.0",
-    "oxfmt": "0.74.0",
+    "oxfmt": "0.75.0",
     "react": "19.3.1",
-    "react-native": "0.88.0",
+    "react-native": "0.88.1",
     "typescript": "7.0.2",
     "vitest": "4.1.12"
   },
