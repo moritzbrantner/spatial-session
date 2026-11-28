@@ -52,7 +52,7 @@
     "react-native-nitro-modules": ">=0.36.5 <1"
   },
   "devDependencies": {
-    "@types/react": "19.3.0",
+    "@types/react": "19.3.1",
     "oxfmt": "0.80.0",
     "react": "19.3.1",
     "react-native": "0.88.1",
